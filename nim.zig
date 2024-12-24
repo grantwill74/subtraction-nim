@@ -121,10 +121,47 @@ const WhichPlayer = enum(u1) {
     Ai = 1,
 };
 
+const RulesError = error {
+    MaxTakeIsZero,
+    TargetScoreIsZero,
+};
+
 const Rules = struct {
     max_take: u8 = 2,
     target_score: u8 = 20,
     winner_takes_last: bool = true,
+
+    fn init(
+        max_take: u8,
+        target_score: u8,
+        winner_takes_last: bool,
+    ) RulesError!Rules {
+        if (max_take == 0) { return error.MaxTakeIsZero; }
+        if (target_score == 0) { return error.TargetScoreIsZero; }
+
+        return .{
+            .max_take = max_take,
+            .target_score = target_score,
+            .winner_takes_last = winner_takes_last,
+        };
+    }
+
+    test init {
+        const t = std.testing;
+
+        try t.expectError(error.MaxTakeIsZero, init(0, 20, true));
+        try t.expectError(error.MaxTakeIsZero, init(0, 20, false));
+        try t.expectError(error.TargetScoreIsZero, init(10, 0, true));
+        try t.expectError(error.TargetScoreIsZero, init(10, 0, false));
+        {
+            const expected = Rules {
+                .max_take = 3,
+                .target_score = 10,
+                .winner_takes_last = true,
+            };
+            try t.expectEqual(expected, init(3, 10, true));
+        }
+    }
 };
 
 const AiState = struct {
