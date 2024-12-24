@@ -318,14 +318,14 @@ const MoveError = error {
     TookPastZero,
 };
 
-const GameState = struct {
+const NimGame = struct {
     rules: Rules,
     
     turn: u1,
     score_left: u8,
 
-    fn init(rules: Rules) GameState {
-        return GameState {
+    fn init(rules: Rules) NimGame {
+        return NimGame {
             .rules = rules,
 
             .turn = 0,
@@ -333,7 +333,7 @@ const GameState = struct {
         };
     }
 
-    fn makeMove(self: *GameState, amount_to_take: u8) MoveError!void {
+    fn makeMove(self: *NimGame, amount_to_take: u8) MoveError!void {
         if (self.gameWon()) { return error.GameOver; }
         if (amount_to_take == 0) { return error.TookZero; }
         if (amount_to_take > self.rules.max_take) 
@@ -344,12 +344,12 @@ const GameState = struct {
         self.turn ^= 1;
     }
 
-    fn gameWon(self: GameState) bool {
+    fn gameWon(self: NimGame) bool {
         return self.score_left == 0;
     }
 };
 
-test GameState {
+test NimGame {
 const t = std.testing;
     const rules = Rules {
         .max_take = 3,
@@ -357,7 +357,7 @@ const t = std.testing;
         .winner_takes_last = false,
     };
 
-    var state = GameState.init(rules);
+    var state = NimGame.init(rules);
     
     try t.expectEqual(10, state.score_left);
     try t.expectEqual(0, state.turn);
@@ -403,7 +403,7 @@ const t = std.testing;
 
 fn printRules( 
     writer: anytype, 
-    state: GameState
+    state: NimGame
 ) void {
     writer.write("Current rules:\n");
     writer.print("1. Max amount you can take: {}\n", .{state.maxTake});
@@ -416,7 +416,7 @@ fn printRules(
 fn viewChangeRulesMenu(
     reader: anytype,
     writer: anytype,
-    state: *GameState,
+    state: *NimGame,
 ) !void {
     while (true) {
         printRules(writer, state.*);
