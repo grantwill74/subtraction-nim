@@ -311,10 +311,16 @@ test createAi {
     }
 }
 
+const MoveError = error {
+    GameOver,
+    TookZero,
+    TookMoreThanRulesAllow,
+    TookPastZero,
+};
+
 const GameState = struct {
     rules: Rules,
     
-    ai_next_target: u8,
     turn: u1,
     score_left: u8,
 
@@ -331,21 +337,19 @@ const GameState = struct {
         };
     }
 
-    fn makeMove(self: *GameState, amount_to_take: u8) void {
-        if (amount_to_take == 0) {
-            std.debug.panic("tried to take 0.");
-        }
+    fn makeMove(self: *GameState, amount_to_take: u8) MoveError!void {
+        if (self.gameWon()) { return error.GameOver; }
+        if (amount_to_take == 0) { return error.TookZero; }
+        if (amount_to_take > self.rules.max_take) 
+            { return error.TookMoreThanRulesAllow; }
+        if (amount_to_take > self.score_left) { return error.TookPastZero; }
 
-        const actual_take = @min(amount_to_take, self.rules.max_take);
-        self.score_left -= actual_take;
+        self.score_left -= amount_to_take;
+        self.turn ^= 1;
     }
 
     fn gameWon(self: GameState) bool {
         return self.score_left == 0;
-    }
-
-    fn whoseTurn(self: GameState) WhichPlayer {
-        return self.ai_strat.firstGoer ^ self.turn;
     }
 
     test makeMove {
@@ -359,7 +363,46 @@ const GameState = struct {
 
         const state = GameState.init(rules);
         
-        t.expectEqual(10, state.score_left);
+        try t.expectEqual(10, state.score_left);
+        try t.expectEqual(0, state.turn);
+
+        try state.makeMove(2);
+
+        try t.expectEqual(8. state.score_left);
+        try t.expectEqual(1, state.turn);
+
+        try t.expectError(error.TookMoreThanRulesAllow, state.makeMove(4));
+        try t.expectError(error.TookZero, state.makeMove(0));
+
+        try t.expectEqual(8. state.score_left);
+        try t.expectEqual(1, state.turn);
+
+        try state.makeMove (3);
+
+        try t.expectEqual(5, state.score_left);
+        try t.expectEqual(0, state.turn);
+
+        try state.makeMove (3);
+
+        try t.expectEqual(2, state.score_left);
+        try t.expectEqual(1, state.turn);
+
+        try t.expectError(error.TookPastZero, state.makeMove(3));
+
+        try t.expectEqual(2, state.score_left);
+        try t.expectEqual(1, state.turn);
+
+        try state.makeMove (2);
+
+        try t.expectEqual(0, state.score_left);
+        try t.expectEqual(0, state.turn);
+        try t.expect(state.gameWon());
+
+        t.expectError(error.GameOver, state.makeMove (3));
+
+        try t.expectEqual(0, state.score_left);
+        try t.expectEqual(0, state.turn);
+        try t.expect(state.gameWon());
     }
 };
 
