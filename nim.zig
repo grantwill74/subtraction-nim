@@ -403,8 +403,8 @@ const t = std.testing;
 
 fn howToPlay(reader: anytype, writer: anytype) !void {
     const message =
-        \\Nim is a game you cannot win, but you must discover that for yourself.
-        \\Each game starts with a certain number of points.
+        \\Subtraction nim is a game you cannot win, but you must discover that
+        \\for yourself. Each game starts with a certain number of points.
         \\Each turn, one player may subtract upto a certain number of points.
         \\Then the next turn, the alternate player may subtract upto that
         \\same number of points.
@@ -520,7 +520,7 @@ fn mainMenu(
 
     while (true) {
         const msg =
-            \\Welcome to Nim (not the programming language)!
+            \\Welcome to subtraction Nim (not the programming language)!
             \\Are you ready for a game you cannot win?
             \\1. Yes! (start game)
             \\2. How to play
