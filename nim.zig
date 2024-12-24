@@ -401,6 +401,50 @@ const t = std.testing;
     try t.expect(state.gameWon());
 }
 
+fn howToPlay(reader: anytype, writer: anytype) !void {
+    const message =
+        \\Nim is a game you cannot win, but you must discover that for yourself.
+        \\Each game starts with a certain number of points.
+        \\Each turn, one player may subtract upto a certain number of points.
+        \\Then the next turn, the alternate player may subtract upto that
+        \\same number of points.
+        \\You may choose to take fewer points if you wish, but you must always
+        \\take at least one.
+        \\The winner is, by default, the one who takes the last point
+        \\(this can be customized in the change rules menu so that taking the
+        \\last point makes you lose instead).
+        \\
+        \\(press enter to see an example game)
+        \\
+    ;
+
+    _ = try writer.write(message);
+    try reader.skipUntilDelimiterOrEof('\n');
+
+    const example_game =
+        \\Example, suppose there are 10 points, players may take up to 3, and
+        \\the last player to take wins.
+        \\  Let player 1 take 2. Now there are 8.
+        \\  Then let player 2 take 3. Now there are 5.
+        \\  Then let player 1 take 1. Now there are 4.
+        \\  Then let player 2 take 3. Now there is 1.
+        \\  Then let player 1 take the last point. Player 1 wins.
+        \\
+        \\Again, in this particular game, you may take from 1 to 3 points.
+        \\However, the default game has 20 points and you may take 1 or 2.
+        \\If the last-player-to-take-loses rule is used, then in the previous
+        \\game, player 2 would have won instead.
+        \\
+        \\(press enter to return to the main menu)
+        \\
+    ;
+
+    _ = try writer.write(example_game);
+    try reader.skipUntilDelimiterOrEof('\n');
+
+    return;
+}
+
 fn printRules( 
     writer: anytype, 
     rules: Rules,
@@ -495,7 +539,7 @@ fn mainMenu(
                 played_at_least_once = true;
                 unreachable; 
             },
-            2 => { unreachable; },
+            2 => { try howToPlay(reader, writer); },
             3 => { 
                 game.rules = try
                     viewChangeRulesMenu(reader, writer, game.rules);
