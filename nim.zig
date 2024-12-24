@@ -403,23 +403,38 @@ const t = std.testing;
 
 fn printRules( 
     writer: anytype, 
-    state: NimGame
-) void {
-    writer.write("Current rules:\n");
-    writer.print("1. Max amount you can take: {}\n", .{state.maxTake});
-    writer.print("2. Score target: {}\n", .{state.targetScore});
-    const lose_win = ([_]*const u8{ "lose", "win" })[state.winnerTakesLast]; 
-    writer.print("3. Taking last point makes you *{}*.\n", lose_win);
-    writer.write("4. Back to menu\n");
+    rules: Rules,
+) !void {
+    const format =
+        \\Current rules:
+        \\1. Max amount you can take: {}
+        \\2. Score target: {}
+        \\3. Taking last point makes you *{s}*.
+        \\4. Back to main menu.
+        \\
+    ;
+    const lose_win = 
+        ([_][]const u8{ "lose", "win" })
+        [@intFromBool(rules.winner_takes_last)]; 
+    
+    try writer.print(format, .{
+        rules.max_take,
+        rules.target_score,
+        lose_win
+    });
 }
 
 fn viewChangeRulesMenu(
     reader: anytype,
     writer: anytype,
-    state: *NimGame,
-) !void {
-    while (true) {
-        printRules(writer, state.*);
+    current_rules: Rules,
+) !Rules {
+    var rules = current_rules;
+
+    return while (true) {
+        _ = try writer.write("\n");
+        try printRules(writer, rules);
+
         const prompt = "Choose rule to change or 4 to return.";
         const choice = try 
             promptIntInRangeInsist(reader, writer, prompt, 1, 4);
@@ -427,54 +442,76 @@ fn viewChangeRulesMenu(
         switch (choice) {
             1 => {  
                 const p = "Change max amount you can take:";
-                const amnt = try 
-                    promptIntInRangeInsist(reader, writer, p, 1, 255);
-                state.maxTake = amnt;
+                rules.max_take = @truncate(try 
+                    promptIntInRangeInsist(reader, writer, p, 1, 255));
                 continue;
             },
             2 => {
                 const p = "Change target score to win or lose:";
-                const amnt = try 
-                    promptIntInRangeInsist(reader, writer, p, 1, 255);
-                state.targetScore = amnt;
+                rules.target_score = @truncate(try 
+                    promptIntInRangeInsist(reader, writer, p, 1, 255));
                 continue;
             },
             3 => {
                 const p = 
                     "Does taking the last point make you win (1) or lose (2)?";
                 const r = try promptIntInRangeInsist(reader, writer, p, 1, 2);
-                const yn = r == 1;
-                state.winnerTakesLast = yn;
+                rules.winner_takes_last = r == 1;
                 continue;
             },
             4 => {
-                return;
+                break rules;
             },
             else => unreachable
         }
-    }
+    };
 }
 
 fn mainMenu(
     reader: anytype,
     writer: anytype,
-    // state: *GameState,
 ) !void {
+    var game = NimGame.init(Rules {});
+    var played_at_least_once = false;
+
     while (true) {
-        const p = writer.print;
-        try p("Welcome to nim (not the programming language)!\n", .{});
-        try p("Are you ready for a game you cannot win?\n", .{});
-        try p("1. Yes! (start game)\n", .{});
-        try p("2. How to play", .{});
-        try p("3. View/change ruleset", .{});
-        try p("4. No. (quit)\n", .{});
+        const msg =
+            \\Welcome to Nim (not the programming language)!
+            \\Are you ready for a game you cannot win?
+            \\1. Yes! (start game)
+            \\2. How to play
+            \\3. View/change ruleset
+            \\4. No. (quit)
+            \\
+        ;
+
+        _ = try writer.write(msg);
 
         const choice = try 
-            promptIntInRangeInsist(reader, writer, "choice:", 1, 2);
+            promptIntInRangeInsist(reader, writer, "choice:", 1, 4);
 
         switch (choice) {
-
-            4 => { break; }
+            1 => { 
+                played_at_least_once = true;
+                unreachable; 
+            },
+            2 => { unreachable; },
+            3 => { 
+                game.rules = try
+                    viewChangeRulesMenu(reader, writer, game.rules);
+                _ = try writer.write("\n");
+                continue;
+            },
+            4 => { 
+                const quit_messages = [_][]const u8{
+                    "That's understandable.\n",
+                    "Thanks for playing!\n",
+                };
+                _ = try writer.write(
+                        quit_messages[@intFromBool(played_at_least_once)]);
+                break;
+            },
+            else => unreachable,
         }
     }
 }
@@ -483,20 +520,6 @@ fn mainMenu(
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
-
-    try stdout.print("Welcome to nim (not the programming language)!\n", .{});
-    try stdout.print("Are you ready for a game you cannot win?\n", .{});
-    try stdout.print("1. Yes! (start game)\n", .{});
-    try stdout.print("2. How to play", .{});
-    try stdout.print("3. View/change ruleset", .{});
-    try stdout.print("4. No. (quit)\n", .{});
-
-    const choice = try promptIntInRangeInsist(stdin, stdout, "choice:", 1, 2);
-
-    if (choice == 4) {
-        try stdout.print("you're no fun...\n", .{});
-        return;
-    }
-
-
+    
+    try mainMenu(stdin, stdout);
 }
