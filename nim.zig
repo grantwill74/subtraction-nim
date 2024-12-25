@@ -117,8 +117,8 @@ fn promptIntInRangeInsist(
 }
 
 const WhichPlayer = enum(u1) {
-    Player = 0,
-    Ai = 1,
+    Player = 1,
+    Ai = 0,
 };
 
 const RulesError = error {
@@ -335,7 +335,8 @@ const NimGame = struct {
         if (amount_to_take > self.score_left) { return error.TookPastZero; }
 
         self.score_left -= amount_to_take;
-        self.turn ^= 1;
+        
+        if (!self.gameWon()) { self.turn ^= 1; }
     }
 
     fn gameWon(self: NimGame) bool {
@@ -400,35 +401,48 @@ fn play(
     writer: anytype,
     rules: Rules,
 ) !void {
-    const ai = createAi(rules);
-    const game = NimGame.init(rules);
-    _ = reader;
-    
-    var whose_turn = ai.first_goer;
+    var ai = createAi(rules);
+    var game = NimGame.init(rules);
 
-    const message = switch (whose_turn) {
-        .Player => "I think you should go first.\n",
+    _ = try writer.write("\n");
+
+    const message = switch (ai.first_goer) {
         .Ai => "I choose to go first.\n",
+        .Player => "I think you should go first.\n",
     };
+    const ai_turn = ai.first_goer;
 
     _ = try writer.write(message);
 
-    while(true) {
-        const inc = rules.max_take + 1;
-        _ = inc;
-        // const ai_take = @min(ai.target_take)
+    const winner: WhichPlayer = while(true) {
+        std.debug.assert(game.score_left > 0);
+
+        try writer.print("{} points remain.\n", .{game.score_left});
         
-        // @min(rules.points, ai_take + inc);
-        writer.print("{} points remain.\n", .{game.score_left});
-        
-        if (whose_turn == ai.first_goer) {
-            
+        if (game.turn == @intFromEnum(ai_turn)) {
+            std.debug.assert(game.score_left > ai.next_target);
+            const take = game.score_left - ai.next_target;
+            try writer.print("I will take {}.\n", .{take});
+            try game.makeMove(take);
+            ai.next_target -=
+                if (ai.next_target > rules.max_take) rules.max_take + 1
+                else 0;  
         } else {
-            
+            const p = "How many do you wish to take?";
+            const take = try 
+                promptIntInRangeInsist(reader, writer, p, 1, rules.max_take);
+            try game.makeMove(@truncate(take));
         }
 
-        whose_turn ^= 1;
-    }
+        if (game.gameWon()) { 
+            const ai_took_last_turn = @intFromEnum(ai_turn) == game.turn;
+            const ai_wins = ai_took_last_turn == rules.winner_takes_last;
+            break if (ai_wins) .Ai else .Player;
+        }
+    };
+
+    const pronoun = ([_][]const u8{ "I", "You" })[@intFromEnum(winner)];
+    try writer.print("Game over! {s} win!\n\n", .{pronoun});
 }
 
 fn howToPlay(reader: anytype, writer: anytype) !void {
@@ -545,7 +559,7 @@ fn mainMenu(
     reader: anytype,
     writer: anytype,
 ) !void {
-    var game = NimGame.init(Rules {});
+    var rules = Rules {};
     var played_at_least_once = false;
 
     while (true) {
@@ -567,12 +581,11 @@ fn mainMenu(
         switch (choice) {
             1 => { 
                 played_at_least_once = true;
-                unreachable; 
+                try play(reader, writer, rules);
             },
             2 => { try howToPlay(reader, writer); },
             3 => { 
-                game.rules = try
-                    viewChangeRulesMenu(reader, writer, game.rules);
+                rules = try viewChangeRulesMenu(reader, writer, rules);
                 _ = try writer.write("\n");
                 continue;
             },
