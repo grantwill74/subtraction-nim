@@ -128,20 +128,20 @@ const RulesError = error {
 
 const Rules = struct {
     max_take: u8 = 2,
-    target_score: u8 = 20,
+    points: u8 = 20,
     winner_takes_last: bool = true,
 
     fn init(
         max_take: u8,
-        target_score: u8,
+        points: u8,
         winner_takes_last: bool,
     ) RulesError!Rules {
         if (max_take == 0) { return error.MaxTakeIsZero; }
-        if (target_score == 0) { return error.TargetScoreIsZero; }
+        if (points == 0) { return error.TargetScoreIsZero; }
 
         return .{
             .max_take = max_take,
-            .target_score = target_score,
+            .points = points,
             .winner_takes_last = winner_takes_last,
         };
     }
@@ -156,7 +156,7 @@ const Rules = struct {
         {
             const expected = Rules {
                 .max_take = 3,
-                .target_score = 10,
+                .points = 10,
                 .winner_takes_last = true,
             };
             try t.expectEqual(expected, init(3, 10, true));
@@ -170,41 +170,39 @@ const AiState = struct {
     // next target is always max_take + 1 + last_target
 };
 
-fn createAi(self: Rules) AiState {
-    std.debug.assert(self.max_take > 0);
-    std.debug.assert(self.target_score > 0);
+fn createAi(rules: Rules) AiState {
+    std.debug.assert(rules.max_take > 0);
+    std.debug.assert(rules.points > 0);
 
-    if (self.target_score == 1 and !self.winner_takes_last) {
+    if (rules.points == 1 and !rules.winner_takes_last) {
         return .{ .first_goer = .Player, .next_target = 1 };
     }
 
     // if loser takes last, then we want to take the one before last
-    const actual_target = 
-        if (self.winner_takes_last)
-            self.target_score
+    const actual_points = 
+        if (rules.winner_takes_last)
+            rules.points
         else 
-            self.target_score - 1;
+            rules.points - 1;
 
     // if one can win in one turn, ai will want to go first
-    if (self.max_take >= actual_target) {
-        return .{ .first_goer = .Ai, .next_target = actual_target};
+    if (rules.max_take >= actual_points) {
+        return .{ .first_goer = .Ai, .next_target = 0};
     }
 
-    // the trick with nim is that you work backwards from the target.
-    // so if you need 20 to win and max_take is 2, that means that if you get 
-    // 17 you win, because the other person must take 1 or 2, and regardless,
-    // 18 means you win and 19 means you win.
-    // so then, recursively, we need 14 to get 17. and 11 to get 14.
-    // if we take 20 % (max_take = 2 + 1 = 3), we get 2, which means whoever
-    // gets two actually wins. therefore, 2 is our target and we can get it
-    // if we go first.
-    const rem = actual_target % (self.max_take + 1);
+    // what number do we want to end our turn on at the end of the game, 
+    // to guarantee we win after the opponent takes their turn?
+    const last_target = rules.max_take + 1;
+    const rem = (actual_points - last_target) % last_target;
 
     if (rem == 0) {
-        return .{ .first_goer = .Player, .next_target = self.max_take + 1 };
+        return .{ 
+            .first_goer = .Player, 
+            .next_target = rules.points - rules.max_take - 1
+        };
     }
 
-    return .{ .first_goer = .Ai, .next_target = rem };
+    return .{ .first_goer = .Ai, .next_target = rules.points - rem };
 }
 
 test createAi {
@@ -213,7 +211,7 @@ test createAi {
         const default_rules = Rules {};
         const default_expected = AiState {
             .first_goer = .Ai,
-            .next_target = 2,
+            .next_target = 18,
         };
 
         try t.expectEqual(default_expected, createAi(default_rules));
@@ -221,12 +219,12 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 3,
-            .target_score = 20,
+            .points = 20,
             .winner_takes_last = true,
         };
         const expected = AiState {
             .first_goer = .Player,
-            .next_target = 4,
+            .next_target = 16,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -234,12 +232,12 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 4,
-            .target_score = 20,
+            .points = 20,
             .winner_takes_last = false,
         };
         const expected = AiState {
             .first_goer = .Ai,
-            .next_target = 4,
+            .next_target = 16,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -247,12 +245,12 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 3,
-            .target_score = 3,
+            .points = 3,
             .winner_takes_last = true,
         };
         const expected = AiState {
             .first_goer = .Ai,
-            .next_target = 3,
+            .next_target = 0,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -260,12 +258,12 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 2,
-            .target_score = 1,
+            .points = 1,
             .winner_takes_last = true,
         };
         const expected = AiState {
             .first_goer = .Ai,
-            .next_target = 1,
+            .next_target = 0,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -273,25 +271,21 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 2,
-            .target_score = 1,
+            .points = 1,
             .winner_takes_last = false,
         };
-        const expected = AiState {
-            .first_goer = .Player,
-            .next_target = 1,
-        };
 
-        try t.expectEqual(expected, createAi(rule));
+        try t.expectEqual(.Player, createAi(rule).first_goer);
     }
     {
         const rule = Rules {
             .max_take = 1,
-            .target_score = 10,
+            .points = 10,
             .winner_takes_last = true,
         };
         const expected = AiState {
             .first_goer = .Player,
-            .next_target = 2,
+            .next_target = 8,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -299,12 +293,12 @@ test createAi {
     {
         const rule = Rules {
             .max_take = 1,
-            .target_score = 10,
+            .points = 10,
             .winner_takes_last = false,
         };
         const expected = AiState {
             .first_goer = .Ai,
-            .next_target = 1,
+            .next_target = 9,
         };
 
         try t.expectEqual(expected, createAi(rule));
@@ -329,7 +323,7 @@ const NimGame = struct {
             .rules = rules,
 
             .turn = 0,
-            .score_left = rules.target_score,
+            .score_left = rules.points,
         };
     }
 
@@ -353,7 +347,7 @@ test NimGame {
 const t = std.testing;
     const rules = Rules {
         .max_take = 3,
-        .target_score = 10,
+        .points = 10,
         .winner_takes_last = false,
     };
 
@@ -399,6 +393,42 @@ const t = std.testing;
     try t.expectEqual(0, state.score_left);
     try t.expectEqual(0, state.turn);
     try t.expect(state.gameWon());
+}
+
+fn play(
+    reader: anytype,
+    writer: anytype,
+    rules: Rules,
+) !void {
+    const ai = createAi(rules);
+    const game = NimGame.init(rules);
+    _ = reader;
+    
+    var whose_turn = ai.first_goer;
+
+    const message = switch (whose_turn) {
+        .Player => "I think you should go first.\n",
+        .Ai => "I choose to go first.\n",
+    };
+
+    _ = try writer.write(message);
+
+    while(true) {
+        const inc = rules.max_take + 1;
+        _ = inc;
+        // const ai_take = @min(ai.target_take)
+        
+        // @min(rules.points, ai_take + inc);
+        writer.print("{} points remain.\n", .{game.score_left});
+        
+        if (whose_turn == ai.first_goer) {
+            
+        } else {
+            
+        }
+
+        whose_turn ^= 1;
+    }
 }
 
 fn howToPlay(reader: anytype, writer: anytype) !void {
@@ -463,7 +493,7 @@ fn printRules(
     
     try writer.print(format, .{
         rules.max_take,
-        rules.target_score,
+        rules.points,
         lose_win
     });
 }
@@ -492,7 +522,7 @@ fn viewChangeRulesMenu(
             },
             2 => {
                 const p = "Change target score to win or lose:";
-                rules.target_score = @truncate(try 
+                rules.points = @truncate(try 
                     promptIntInRangeInsist(reader, writer, p, 1, 255));
                 continue;
             },
